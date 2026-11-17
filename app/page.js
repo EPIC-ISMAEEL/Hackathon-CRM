@@ -1,5 +1,5 @@
 'use client';
-import {useState,useEffect,useCallback} from 'react';
+import {useState,useEffect,useCallback,useRef} from 'react';
 const api=async(url,o)=>{const r=await fetch(url,{headers:{'Content-Type':'application/json'},...o});const d=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(d.error||'Request failed'),{data:d});return d};
 const PAL=['#d59b79','#7d9db9','#bd8c9a','#8eaa91','#b39bc9','#c69a68','#729b9c'];
 const ini=n=>n.split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();
@@ -8,13 +8,15 @@ const VIEWS={overview:['Workspace / Overview','Customer delivery journeys','A cl
 const Av=({u,cls=''})=><div className={'avatar '+cls} style={{background:PAL[(u.idx||0)%PAL.length]}}>{ini(u.name)}</div>;
 
 export default function App(){
- const [me,setMe]=useState(undefined),[users,setUsers]=useState([]),[projects,setProjects]=useState([]),[view,setView]=useState('overview'),[msg,setMsg]=useState(''),[detail,setDetail]=useState(null),[tx,setTx]=useState(false);
+ const [me,setMe]=useState(undefined),[users,setUsers]=useState([]),[projects,setProjects]=useState([]),[view,setView]=useState('overview'),[msg,setMsg]=useState(''),[detail,setDetail]=useState(null),[tx,setTx]=useState(false),[profileMenu,setProfileMenu]=useState(false);
+ const profileMenuRef=useRef(null);
  const toast=s=>{setMsg(s);setTimeout(()=>setMsg(''),2800)};
  const load=useCallback(async()=>{const[u,p]=await Promise.all([api('/api/users'),api('/api/projects')]);setUsers(u.users.map((x,idx)=>({...x,idx})));setProjects(p.projects)},[]);
  useEffect(()=>{api('/api/auth').then(async d=>{setMe(d.user);if(d.user)await load()}).catch(()=>setMe(null))},[load]);
+ useEffect(()=>{if(!profileMenu)return;const close=e=>{if(!profileMenuRef.current?.contains(e.target))setProfileMenu(false)};const key=e=>{if(e.key==='Escape')setProfileMenu(false)};document.addEventListener('click',close);document.addEventListener('keydown',key);return()=>{document.removeEventListener('click',close);document.removeEventListener('keydown',key)}},[profileMenu]);
  const P=id=>users.find(u=>u.id===id)||{name:'Unknown',idx:0};
  const open=async id=>{try{setDetail((await api('/api/projects/'+id)).project)}catch(e){toast(e.message)}};
- const logout=async()=>{await api('/api/auth',{method:'DELETE'});setMe(null);setProjects([]);setView('overview')};
+ const logout=async()=>{await api('/api/auth',{method:'DELETE'});setProfileMenu(false);setMe(null);setProjects([]);setView('overview')};
  if(me===undefined)return null;
  if(!me)return<Login onOk={async u=>{setMe(u);await load()}}/>;
 
@@ -38,7 +40,10 @@ export default function App(){
   <header className="topbar">
    <div className="wordmark">J4<span> / workspace</span></div>
    <nav className="nav">{[['overview','Overview'],['projects','Projects'],['tasks',agent?'My tasks':'Tasks'],['team','Team']].map(([v,t])=><button key={v} className={view===v?'active':''} onClick={()=>go(v)}>{t}</button>)}</nav>
-   <div className="top-actions"><span className="hint">{me.name} · {me.role.toLowerCase()}</span><div className="avatar profile" title="Sign out" style={{cursor:'pointer'}} onClick={logout}>{ini(me.name)}</div></div>
+   <div className="top-actions"><span className="hint">{me.name} · {me.role.toLowerCase()}</span><div className="profile-menu" ref={profileMenuRef}>
+    <button type="button" className="avatar profile profile-trigger" aria-label="Open account menu" aria-haspopup="menu" aria-expanded={profileMenu} onClick={()=>setProfileMenu(open=>!open)}>{ini(me.name)}</button>
+    {profileMenu&&<div className="profile-popover" role="menu"><div className="profile-summary"><strong>{me.name}</strong><small>{me.role.toLowerCase()}</small></div><button type="button" role="menuitem" onClick={logout}>Sign out</button></div>}
+   </div></div>
   </header>
   <section className="pagehead"><div><div className="eyebrow">{eb}</div><h1>{title}</h1><div className="sub">{sub}</div></div>
    <div className="headtools"><button className="btn" onClick={()=>go('team')}>Team directory</button>{admin&&<button className="btn dark" onClick={()=>setTx(true)}>＋ Create from transcript</button>}</div></section>
@@ -94,14 +99,22 @@ export default function App(){
 }
 
 function Login({onOk}){
- const[email,setEmail]=useState('admin@novaworks.example'),[pw,setPw]=useState('Demo123!'),[err,setErr]=useState(''),[busy,setBusy]=useState(false);
- const go=async()=>{setBusy(true);setErr('');try{onOk((await api('/api/auth',{method:'POST',body:JSON.stringify({email,password:pw})})).user)}catch(e){setErr(e.message);setBusy(false)}};
- return<div className="login show"><div className="loginbox"><img src="/logo.png" alt="J4"/><div className="eyebrow" style={{marginTop:24}}>Welcome back</div><h1>Sign in to J4</h1><p>Use one of the fictional demo accounts supplied for the challenge.</p>
-  <div className="field"><label>Email address</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)}/></div>
-  <div className="field"><label>Password</label><input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==='Enter'&&go()}/></div>
-  {err&&<div className="issues">{err}</div>}
-  <button className="btn dark" disabled={busy} onClick={go}>{busy?<><span className="spin"/>Signing in…</>:'Sign in →'}</button>
-  <div className="hint" style={{marginTop:14}}>Demo password for all accounts: <b>Demo123!</b></div></div></div>;
+ const[mode,setMode]=useState('login'),[name,setName]=useState(''),[email,setEmail]=useState('admin@novaworks.example'),[pw,setPw]=useState('Demo123!'),[confirm,setConfirm]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false);
+ const go=async event=>{event.preventDefault();setErr('');if(mode==='signup'&&pw!==confirm){setErr('Passwords do not match.');return}setBusy(true);try{const{user}=await api(mode==='signup'?'/api/auth/signup':'/api/auth',{method:'POST',body:JSON.stringify({name,email,password:pw})});await onOk(user)}catch(e){setErr(e.message);setBusy(false)}};
+ const switchMode=next=>{setMode(next);setErr('');setName('');setEmail('');setPw('');setConfirm('')};
+ const signup=mode==='signup';
+ return<div className="login show"><div className="loginbox"><img src="/logo.png" alt="J4"/><div className="eyebrow" style={{marginTop:24}}>{signup?'Create your account':'Welcome back'}</div><h1>{signup?'Sign up for J4':'Sign in to J4'}</h1><p>{signup?'New accounts are created with agent access.':'Use one of the fictional demo accounts supplied for the challenge.'}</p>
+  <form onSubmit={go}>
+   {signup&&<div className="field"><label htmlFor="signup-name">Full name</label><input id="signup-name" type="text" autoComplete="name" maxLength={80} required value={name} onChange={e=>setName(e.target.value)}/></div>}
+   <div className="field"><label htmlFor="auth-email">Email address</label><input id="auth-email" type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)}/></div>
+   <div className="field"><label htmlFor="auth-password">Password</label><input id="auth-password" type="password" autoComplete={signup?'new-password':'current-password'} minLength={signup?8:undefined} required value={pw} onChange={e=>setPw(e.target.value)}/></div>
+   {signup&&<div className="field"><label htmlFor="auth-confirm">Confirm password</label><input id="auth-confirm" type="password" autoComplete="new-password" minLength={8} required value={confirm} onChange={e=>setConfirm(e.target.value)}/></div>}
+   {err&&<div className="issues" role="alert">{err}</div>}
+   <button className="btn dark" type="submit" disabled={busy}>{busy?<><span className="spin"/>{signup?'Creating account…':'Signing in…'}</>:signup?'Create account →':'Sign in →'}</button>
+  </form>
+  {signup?<div className="auth-switch">Already have an account? <button type="button" onClick={()=>switchMode('login')}>Sign in</button><div className="hint">Use a password of at least 8 characters.</div></div>
+   :<><div className="hint" style={{marginTop:14}}>Demo password for all accounts: <b>Demo123!</b></div><div className="auth-switch">New to J4? <button type="button" onClick={()=>switchMode('signup')}>Create an account</button></div></>}
+ </div></div>;
 }
 
 function Transcript({onClose,onDone,onView}){

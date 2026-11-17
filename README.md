@@ -4,7 +4,7 @@ Meeting → projects & tasks. Admin pastes a transcript; Gemini creates projects
 **Stack:** Next.js 16 and React 19 (App Router, API routes), MongoDB Atlas, Gemini API, JWT cookie sessions (jose), bcryptjs.
 
 ## Features
-Login/logout · admin home + Create from Transcript · read-only team directory · projects/project detail · task table (title, description, agent, deadline, hours) · manager sees own projects · agent sees only own tasks · persistent DB · role checks enforced server-side in every API · all-or-nothing Mongo transaction · validation with editable correction + revalidation · loading/error states, double-click protection.
+Sign up/login/logout · new accounts receive agent access · profile menu · admin home + Create from Transcript · read-only team directory · projects/project detail · task table (title, description, agent, deadline, hours) · manager sees own projects · agent sees only own tasks · persistent DB · role checks enforced server-side in every API · all-or-nothing Mongo transaction · validation with editable correction + revalidation · loading/error states, double-click protection.
 
 ## Setup
 ```bash
