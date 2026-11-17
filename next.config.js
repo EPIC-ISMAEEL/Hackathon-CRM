@@ -1,1 +1,1 @@
-module.exports={serverExternalPackages:['mongodb','bcryptjs']};
+module.exports={serverExternalPackages:['mongodb','bcryptjs'],devIndicators:false};
